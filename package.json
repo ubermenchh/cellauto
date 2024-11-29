@@ -1,0 +1,14 @@
+{
+  "name": "cellauto",
+  "version": "1.0.0",
+  "description": "Cellular Automata in TypeScript",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ubermenchh",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
