@@ -1,88 +1,90 @@
 "use strict";
-const CONFIG = {
-    GRID_SIZE: 125,
-    CELL_SIZE: 10,
-    ALIVE_PROB: 0.3,
-};
-function create_grid(size, prob = 0.3) {
-    return Array.from({ length: size }, () => Array.from({ length: size }, () => Math.random() < prob));
+const GRID_ROWS = 900;
+const GRID_COLS = 900;
+const CELL_SIZE = 7.5;
+function create_grid(alive_prob = 0.1) {
+    const grid = [];
+    for (let i = 0; i < GRID_ROWS; i++) {
+        grid.push(new Array(GRID_COLS).fill("dead").map(() => Math.random() < alive_prob ? "alive" : "dead"));
+    }
+    return grid;
 }
-function count_live_nbors(grid, x, y) {
-    const size = grid.length;
+let grid = create_grid();
+const canvas_id = "canvas";
+const canvas = document.getElementById(canvas_id);
+if (canvas === null) {
+    throw new Error(`Could not find canvas ${canvas_id}`);
+}
+const ctx = canvas.getContext("2d");
+if (ctx === null) {
+    throw new Error(`Could not initialize Context`);
+}
+canvas.width = GRID_ROWS;
+canvas.height = GRID_COLS;
+function count_alive_nbors(grid, x, y) {
     let count = 0;
-    for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0)
+    for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+            if (i === 0 && j === 0)
                 continue;
-            const new_x = (x + dx + size) % size;
-            const new_y = (y + dy + size) % size;
-            if (grid[new_x][new_y])
-                count++;
+            const new_x = x + i;
+            const new_y = y + j;
+            if (new_x >= 0 && new_x < GRID_ROWS && new_y >= 0 && new_y < GRID_COLS) {
+                if (grid[new_x][new_y] === "alive") {
+                    count++;
+                }
+            }
         }
     }
     return count;
 }
 function compute_next_grid(current_grid) {
-    const size = current_grid.length;
-    return current_grid.map((row, x) => row.map((is_alive, y) => {
-        const live_nbors = count_live_nbors(current_grid, x, y);
-        if (is_alive) {
-            return live_nbors === 2 || live_nbors === 3;
-        }
-        else {
-            return live_nbors === 3;
-        }
-    }));
-}
-function render_grid(ctx, grid, cell_size) {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    grid.forEach((row, x) => {
-        row.forEach((is_alive, y) => {
-            if (is_alive) {
-                ctx.fillStyle = "#999999";
-                ctx.fillRect(x * cell_size, y * cell_size, cell_size - 1, cell_size - 1);
+    let next_grid = create_grid(0);
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            const alive_nbors = count_alive_nbors(grid, r, c);
+            if (current_grid[r][c] === "alive") {
+                if (alive_nbors === 2 || alive_nbors === 3) {
+                    next_grid[r][c] = "alive";
+                }
+                else {
+                    next_grid[r][c] = "dead";
+                }
             }
-        });
-    });
+            else {
+                if (alive_nbors === 3) {
+                    next_grid[r][c] = "alive";
+                }
+                else {
+                    next_grid[r][c] = "dead";
+                }
+            }
+        }
+    }
+    return next_grid;
 }
-const app = document.getElementById("app");
-const ctx = app.getContext("2d");
-app.width = CONFIG.GRID_SIZE * CONFIG.CELL_SIZE;
-app.height = CONFIG.GRID_SIZE * CONFIG.CELL_SIZE;
-let current_grid = create_grid(CONFIG.GRID_SIZE, CONFIG.ALIVE_PROB);
-let animation_frame_id = null;
-function simulate() {
-    current_grid = compute_next_grid(current_grid);
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
-    animation_frame_id = requestAnimationFrame(simulate);
-}
-function handle_canvas_click(event) {
-    const rect = app.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) / CONFIG.CELL_SIZE);
-    const y = Math.floor((event.clientY - rect.top) / CONFIG.CELL_SIZE);
-    current_grid = current_grid.map((row, row_index) => row.map((cell, col_index) => row_index === x && col_index === y ? !cell : cell));
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
-}
-function start() {
-    if (!animation_frame_id)
-        simulate();
-}
-function stop() {
-    if (animation_frame_id) {
-        cancelAnimationFrame(animation_frame_id);
-        animation_frame_id = null;
+function render() {
+    ctx.fillStyle = "#3A6D8C";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#EAD8B1";
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            if (grid[r][c] === "alive") {
+                const x = c * CELL_SIZE;
+                const y = r * CELL_SIZE;
+                ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            }
+        }
     }
 }
-function reset() {
-    stop();
-    current_grid = create_grid(CONFIG.GRID_SIZE, CONFIG.ALIVE_PROB);
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
+function update() {
+    grid = compute_next_grid(grid);
+    render();
 }
-app.addEventListener("click", handle_canvas_click);
-document.addEventListener("DOMContentLoaded", () => {
-    var _a, _b, _c;
-    (_a = document.getElementById("start")) === null || _a === void 0 ? void 0 : _a.addEventListener("click", start);
-    (_b = document.getElementById("stop")) === null || _b === void 0 ? void 0 : _b.addEventListener("click", stop);
-    (_c = document.getElementById("reset")) === null || _c === void 0 ? void 0 : _c.addEventListener("click", reset);
-    start();
+canvas.addEventListener("click", (e) => {
+    const col = Math.floor(e.offsetX / CELL_SIZE);
+    const row = Math.floor(e.offsetY / CELL_SIZE);
+    grid[row][col] = "alive";
+    render();
 });
+setInterval(update, 100);

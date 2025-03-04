@@ -1,119 +1,105 @@
-type Grid = boolean[][];
-type Coords = { x: number, y: number };
+const GRID_ROWS = 900;
+const GRID_COLS = 900;
+const CELL_SIZE = 7.5;
 
-const CONFIG = {
-    GRID_SIZE: 125,
-    CELL_SIZE: 10,
-    ALIVE_PROB: 0.3,
-};
+type State = "alive" | "dead";
+type Grid = State[][];
 
-function create_grid(size: number, prob: number = 0.3): Grid {
-    return Array.from({ length: size }, () =>
-        Array.from({ length: size }, () => Math.random() < prob)
-    );
+function create_grid(alive_prob: number = 0.1): Grid {
+    const grid: Grid = [];
+    for (let i = 0; i < GRID_ROWS; i++) {
+        grid.push(new Array(GRID_COLS).fill("dead").map(() =>
+            Math.random() < alive_prob ? "alive" : "dead"
+        ));
+    }
+    return grid;
 }
 
-function count_live_nbors(grid: Grid, x: number, y: number): number {
-    const size = grid.length;
-    let count = 0;
+let grid = create_grid();
+const canvas_id = "canvas"
+const canvas = document.getElementById(canvas_id) as HTMLCanvasElement;
+if (canvas === null) {
+    throw new Error(`Could not find canvas ${canvas_id}`)
+}
+const ctx = canvas.getContext("2d");
+if (ctx === null) {
+    throw new Error(`Could not initialize Context`);
+}
 
-    for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0)
-                continue;
+canvas.width = GRID_ROWS;
+canvas.height = GRID_COLS;
 
-            const new_x = (x + dx + size) % size;
-            const new_y = (y + dy + size) % size;
+function count_alive_nbors(grid: Grid, x: number, y: number): number {
+    let count: number = 0;
+    for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+            if (i === 0 && j === 0) continue;
 
-            if (grid[new_x][new_y]) count++;
+            const new_x = x + i;
+            const new_y = y + j;
+
+            if (new_x >= 0 && new_x < GRID_ROWS && new_y >= 0 && new_y < GRID_COLS) {
+                if (grid[new_x][new_y] === "alive") {
+                    count++;
+                }
+            }
         }
     }
     return count;
 }
 
 function compute_next_grid(current_grid: Grid): Grid {
-    const size = current_grid.length;
+    let next_grid: Grid = create_grid(0);
 
-    return current_grid.map((row, x) =>
-        row.map((is_alive, y) => {
-            const live_nbors = count_live_nbors(current_grid, x, y);
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            const alive_nbors = count_alive_nbors(grid, r, c);
 
-            if (is_alive) {
-                return live_nbors === 2 || live_nbors === 3;
+            if (current_grid[r][c] === "alive") {
+                if (alive_nbors === 2 || alive_nbors === 3) {
+                    next_grid[r][c] = "alive";
+                } else {
+                    next_grid[r][c] = "dead";
+                }
             } else {
-                return live_nbors === 3;
+                if (alive_nbors === 3) {
+                    next_grid[r][c] = "alive";
+                } else {
+                    next_grid[r][c] = "dead";
+                }
             }
-        })
-    );
+        }
+    }
+    return next_grid;
 }
 
-function render_grid(ctx: CanvasRenderingContext2D, grid: Grid, cell_size: number) {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+function render() {
+    ctx.fillStyle = "#3A6D8C";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    grid.forEach((row, x) => {
-        row.forEach((is_alive, y) => {
-            if (is_alive) {
-                ctx.fillStyle = "#999999";
-                ctx.fillRect(x * cell_size, y * cell_size, cell_size - 1, cell_size - 1);
+    ctx.fillStyle = "#EAD8B1";
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            if (grid[r][c] === "alive") {
+                const x = c * CELL_SIZE;
+                const y = r * CELL_SIZE;
+                ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
             }
-        });
-    });
-}
-
-const app = document.getElementById("app") as HTMLCanvasElement;
-const ctx = app.getContext("2d")!;
-
-app.width = CONFIG.GRID_SIZE * CONFIG.CELL_SIZE;
-app.height = CONFIG.GRID_SIZE * CONFIG.CELL_SIZE;
-
-let current_grid = create_grid(CONFIG.GRID_SIZE, CONFIG.ALIVE_PROB);
-let animation_frame_id: number | null = null;
-
-function simulate() {
-    current_grid = compute_next_grid(current_grid);
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
-    animation_frame_id = requestAnimationFrame(simulate);
-}
-
-function handle_canvas_click(event: MouseEvent) {
-    const rect = app.getBoundingClientRect();
-
-    const x = Math.floor((event.clientX - rect.left) / CONFIG.CELL_SIZE);
-    const y = Math.floor((event.clientY - rect.top) / CONFIG.CELL_SIZE);
-
-    current_grid = current_grid.map((row, row_index) =>
-        row.map((cell, col_index) =>
-            row_index === x && col_index === y ? !cell : cell
-        )
-    );
-
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
-}
-
-function start() {
-    if (!animation_frame_id)
-        simulate();
-}
-
-function stop() {
-    if (animation_frame_id) {
-        cancelAnimationFrame(animation_frame_id);
-        animation_frame_id = null;
+        }
     }
 }
 
-function reset() {
-    stop();
-    current_grid = create_grid(CONFIG.GRID_SIZE, CONFIG.ALIVE_PROB);
-    render_grid(ctx, current_grid, CONFIG.CELL_SIZE);
+function update() {
+    grid = compute_next_grid(grid);
+    render();
 }
 
-app.addEventListener("click", handle_canvas_click);
+canvas.addEventListener("click", (e) => {
+    const col = Math.floor(e.offsetX / CELL_SIZE);
+    const row = Math.floor(e.offsetY / CELL_SIZE);
+    grid[row][col] = "alive";
 
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("start")?.addEventListener("click", start);
-    document.getElementById("stop")?.addEventListener("click", stop);
-    document.getElementById("reset")?.addEventListener("click", reset);
+    render();
+})
 
-    start();
-});
+setInterval(update, 100);
